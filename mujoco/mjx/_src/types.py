@@ -191,3 +191,6 @@ class Data:
   qM_integration: wp.array(dtype=wp.float32, ndim=3)
   qLD_integration: wp.array(dtype=wp.float32, ndim=3)
   qLDiagInv_integration: wp.array(dtype=wp.float32, ndim=2)
+
+  qderiv_integration: wp.array(dtype=wp.float32, ndim=3)
+  vel_integration: wp.array(dtype=wp.float32, ndim=2)  # todo: remove

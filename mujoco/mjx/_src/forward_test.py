@@ -125,19 +125,25 @@ class ForwardTest(absltest.TestCase):
     np.testing.assert_allclose(d.qvel.numpy()[0], 1 + mjm.opt.timestep)
 
   def test_implicit(self):
-    """
     mjm, mjd, m, d = self._load("humanoid/humanoid.xml", is_sparse=False)
 
-    mjm.opt.disableflags = mjm.opt.disableflags | mujoco.mjtDisableBit.mjDSBL_PASSIVE
-    mjm.opt.disableflags = mjm.opt.disableflags | mujoco.mjtDisableBit.mjDSBL_ACTUATION
-
-    m = mjx.put_model(mjm)
+    #mujoco.mj_transmission(mjm, mjd)
 
     mjm.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+    #mjm.opt.disableflags = mjm.opt.disableflags | mujoco.mjtDisableBit.mjDSBL_PASSIVE
+    #mjm.opt.disableflags = mjm.opt.disableflags | mujoco.mjtDisableBit.mjDSBL_ACTUATION
+
+    m = mjx.put_model(mjm)
+    d = mjx.put_data(mjm, mjd)
+
     mujoco.mj_implicit(mjm, mjd)
     mjx.implicit(m, d)
 
+    #mujoco.mj_Euler(mjm, mjd)
+    #mjx.euler(m, d)
+
     _assert_eq(d.qpos.numpy()[0], mjd.qpos, "qpos")
+
     """
     path = epath.resource_path("mujoco.mjx") / "test_data/pendula.xml"
     mjm = mujoco.MjModel.from_xml_path(path.as_posix())
@@ -160,6 +166,7 @@ class ForwardTest(absltest.TestCase):
 
     _assert_eq(d.qpos.numpy()[0], mjd.qpos, "qpos")
     _assert_eq(d.act.numpy()[0], mjd.act, "act")
+    """
 
 
 if __name__ == "__main__":

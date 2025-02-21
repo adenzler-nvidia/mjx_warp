@@ -203,6 +203,9 @@ def make_data(mjm: mujoco.MjModel, nworld: int = 1) -> types.Data:
   d.qLD_integration = wp.zeros_like(d.qLD)
   d.qLDiagInv_integration = wp.zeros_like(d.qLDiagInv)
 
+  d.qderiv_integration = wp.zeros(shape=(nworld, mjm.nv, mjm.nv), dtype=wp.float32)
+  d.vel_integration = wp.zeros(shape=(nworld, mjm.nu), dtype=wp.float32)  # todo: remove
+
   return d
 
 
@@ -279,5 +282,8 @@ def put_data(mjm: mujoco.MjModel, mjd: mujoco.MjData, nworld: int = 1) -> types.
   d.qM_integration = wp.zeros_like(d.qM)
   d.qLD_integration = wp.zeros_like(d.qLD)
   d.qLDiagInv_integration = wp.zeros_like(d.qLDiagInv)
+
+  d.qderiv_integration = wp.zeros(shape=(nworld, mjm.nv, mjm.nv), dtype=wp.float32)
+  d.vel_integration = wp.zeros(shape=(nworld, mjm.nu), dtype=wp.float32)  # todo: remove
 
   return d

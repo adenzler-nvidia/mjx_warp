@@ -212,12 +212,33 @@ def euler(m: Model, d: Data) -> Data:
 
   return _advance(m, d, d.act_dot, d.qacc)
 
+def qderiv_actuator_moment(m: Model, d: Data, qderiv: array3df, vel: array2df):
+
+  size_nu = m.nu
+  size_nv = m.nv
+  
+  @wp.kernel
+  def qderiv_actuator_moment_kernel(d: Data, qderiv: array3df, vel: array2df):
+    worldid = wp.tid()
+    actuator_moment_tile = wp.tile_load(d.actuator_moment[worldid], shape=(size_nu, size_nv))
+    actuator_moment_T = wp.tile_transpose(actuator_moment_tile)
+    zeros = wp.tile_zeros(shape=(size_nu, size_nu), dtype=wp.float32)
+    vel_tile = wp.tile_load(vel[worldid], shape=(size_nu))
+    diag = wp.tile_diag_add(zeros, vel_tile)
+    amTVel = wp.tile_matmul(actuator_moment_T, diag)
+    qderiv_tile = wp.tile_matmul(amTVel, actuator_moment_tile)
+    wp.tile_store(qderiv[worldid], qderiv_tile)
+
+  wp.launch_tiled(qderiv_actuator_moment_kernel, dim=(d.nworld), inputs=[d, qderiv, vel], block_dim=32)
 
 def implicit(m: Model, d: Data) -> Data:
   """Integrates fully implicit in velocity."""
 
+  # we might want to do some precomputing to figure out if we have any actuators 
+  # that actually would execute this code. Looks like we need at least 1 actuator
+  # with affine bias or gain.
   @wp.kernel
-  def actuator_bias_gain_vel(m: Model, d: Data, vel: array2df):
+  def actuator_bias_gain_vel(m: Model, d: Data):
     worldid, actid = wp.tid()
 
     bias_vel = 0.0
@@ -238,26 +259,7 @@ def implicit(m: Model, d: Data) -> Data:
     if actuator_dyntype != MJ_DYNTYPE_NONE:
       ctrl = d.act[worldid, actid]
 
-    vel[worldid, actid] = bias_vel + gain_vel * ctrl
-
-  def qderiv_actuator_moment(m: Model, d: Data, qderiv: array3df, vel: array2df):
-
-    block_dim = 32
-    tilesize = m.nu
-
-    @wp.kernel
-    def qderiv_actuator_moment_kernel(m: Model, d: Data, qderiv: array3df, vel: array2df):
-      worldid = wp.tid()
-      actuator_moment_tile = wp.tile_load(d.actuator_moment[worldid], shape=(tilesize, tilesize))
-      actuator_moment_T = wp.tile_transpose(actuator_moment_tile)
-      zeros = wp.tile_zeros(shape=(tilesize, tilesize), dtype=wp.float32)
-      vel_tile = wp.tile_load(vel[worldid], shape=(tilesize))
-      diag = wp.tile_diag_add(zeros, vel_tile)
-      amTVel = wp.tile_matmul(actuator_moment_T, diag)
-      qderiv_tile = wp.tile_matmul(amTVel, actuator_moment_tile)
-      wp.tile_store(qderiv[worldid], qderiv_tile)
-
-    wp.launch_tiled(qderiv_actuator_moment_kernel, dim=(d.nworld), inputs=[m, d, qderiv, vel], block_dim=block_dim)
+    d.vel_integration[worldid, actid] = bias_vel + gain_vel * ctrl
 
   @wp.kernel
   def qderiv_add_damping(
@@ -284,34 +286,26 @@ def implicit(m: Model, d: Data) -> Data:
     else:
       wp.launch(add_qderiv_sum_qfrc_kernel_dense, dim=(d.nworld, m.nv, m.nv), inputs=[m, d, qderiv])
 
+  with wp.ScopedDevice("cuda"):
+    # qDeriv += d qfrc_actuator / d qvel
+    if not m.opt.disableflags & MJ_DSBL_ACTUATION:
+      wp.launch(actuator_bias_gain_vel, dim=(d.nworld, m.nu), inputs=[m, d])
 
-  # do we need this here?
-  qderiv = wp.zeros(shape=(d.nworld, m.nv, m.nv), dtype=wp.float32)
-  qderiv_filled = False
+      qderiv_actuator_moment(m, d, d.qderiv_integration, d.vel_integration)
 
-  # qDeriv += d qfrc_actuator / d qvel
-  if not m.opt.disableflags & MJ_DSBL_ACTUATION:
-    vel = wp.zeros(shape=(d.nworld, m.nu), dtype=wp.float32)  # todo: remove
-    wp.launch(actuator_bias_gain_vel, dim=(d.nworld, m.nu), inputs=[m, d, vel])
-    qderiv_filled = True
+    # qDeriv += d qfrc_passive / d qvel
+    if not m.opt.disableflags & MJ_DSBL_PASSIVE:
+      # add damping to qderiv
+      wp.launch(qderiv_add_damping, dim=(d.nworld, m.nv), inputs=[m, d, d.qderiv_integration])
+      # TODO: tendon
+      # TODO: fluid drag, not supported in MJX right now
 
-    qderiv_actuator_moment(m, d, qderiv, vel)
+    if not m.opt.disableflags & MJ_DSBL_ACTUATION and not m.opt.disableflags & MJ_DSBL_PASSIVE:
+      add_qderiv_sum_qfrc(m, d, d.qderiv_integration, m.opt.is_sparse)
+      smooth.factor_i(m, d, d.qM_integration, d.qLD_integration, d.qLDiagInv_integration)
+      smooth.solve_LD(m, d, d.qLD_integration, d.qLDiagInv_integration, d.qacc_integration, d.qfrc_integration)
 
-  # qDeriv += d qfrc_passive / d qvel
-  if not m.opt.disableflags & MJ_DSBL_PASSIVE:
-    # add damping to qderiv
-    wp.launch(qderiv_add_damping, dim=(d.nworld, m.nv), inputs=[m, d, qderiv])
-    qderiv_filled = True
-    # TODO: tendon
-    # TODO: fluid drag, not supported in MJX right now
-
-  if qderiv_filled:
-    add_qderiv_sum_qfrc(m, d, qderiv, m.opt.is_sparse)
-    smooth.factor_i(m, d, d.qM_integration, d.qLD_integration, d.qLDiagInv_integration)
-    smooth.solve_LD(m, d, d.qLD_integration, d.qLDiagInv_integration, d.qfrc_integration, d.qacc_integration)
-    smooth.solve_LD(m, d, d.qLD_integration, d.qLDiagInv_integration, d.qacc_integration, d.qfrc_integration)
-
-    return _advance(m, d, d.act_dot, d.qacc_integration)
+      return _advance(m, d, d.act_dot, d.qacc_integration)
 
   return _advance(m, d, d.act_dot, d.qacc)
 

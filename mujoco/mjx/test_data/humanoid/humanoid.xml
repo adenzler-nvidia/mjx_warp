@@ -207,6 +207,7 @@
   </tendon> -->
 
   <actuator>
+    <!--
     <motor name="abdomen_y"       gear="40"  joint="abdomen_y"/>
     <motor name="abdomen_z"       gear="40"  joint="abdomen_z"/>
     <motor name="abdomen_x"       gear="40"  joint="abdomen_x"/>
@@ -227,7 +228,29 @@
     <motor name="elbow_right"     gear="40"  joint="elbow_right"/>
     <motor name="shoulder1_left"  gear="20"  joint="shoulder1_left"/>
     <motor name="shoulder2_left"  gear="20"  joint="shoulder2_left"/>
-    <motor name="elbow_left"      gear="40"  joint="elbow_left"/>
+    <motor name="elbow_left"      gear="40"  joint="elbow_left"/>-->
+
+    <velocity name="abdomen_y"         joint="abdomen_y"/>
+    <velocity name="abdomen_z"         joint="abdomen_z"/>
+    <velocity name="abdomen_x"         joint="abdomen_x"/>
+    <velocity name="hip_x_right"       joint="hip_x_right"/>
+    <velocity name="hip_z_right"       joint="hip_z_right"/>
+    <velocity name="hip_y_right"       joint="hip_y_right"/>
+    <velocity name="knee_right"        joint="knee_right"/>
+    <velocity name="ankle_x_right"     joint="ankle_x_right"/>
+    <velocity name="ankle_y_right"     joint="ankle_y_right"/>
+    <velocity name="hip_x_left"        joint="hip_x_left"/>
+    <velocity name="hip_z_left"        joint="hip_z_left"/>
+    <velocity name="hip_y_left"        joint="hip_y_left"/>
+    <velocity name="knee_left"         joint="knee_left"/>
+    <velocity name="ankle_x_left"      joint="ankle_x_left"/>
+    <velocity name="ankle_y_left"      joint="ankle_y_left"/>
+    <velocity name="shoulder1_right"   joint="shoulder1_right"/>
+    <velocity name="shoulder2_right"   joint="shoulder2_right"/>
+    <velocity name="elbow_right"       joint="elbow_right"/>
+    <velocity name="shoulder1_left"    joint="shoulder1_left"/>
+    <velocity name="shoulder2_left"    joint="shoulder2_left"/>
+    <velocity name="elbow_left"        joint="elbow_left"/>
   </actuator>
 
   <keyframe>
